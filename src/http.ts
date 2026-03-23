@@ -1,11 +1,13 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { OpenAIChatRequest } from "./types.js";
+import type { OpenAIChatRequest, ClaudeModel } from "./types.js";
 import { VALID_MODELS } from "./types.js";
 import { formatSubagentPrompt, formatChannelNotification } from "./formatter.js";
 import { buildOpenAIResponse, buildOpenAIError, parseModel } from "./response.js";
 import { buildStreamingResponse } from "./streaming.js";
-import { PendingRequestMap } from "./pending.js";
-import { REQUEST_TIMEOUT_MS } from "./config.js";
+import { buildCliStreamingResponse } from "./cli-streaming.js";
+import { runClaude } from "./cli.js";
+import type { PendingRequestMap } from "./pending.js";
+import { REQUEST_TIMEOUT_MS, MODE } from "./config.js";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -15,8 +17,8 @@ const CORS_HEADERS = {
 
 export function createHttpServer(
   port: number,
-  pending: PendingRequestMap,
-  mcp: McpServer
+  pending: PendingRequestMap | null,
+  mcp: McpServer | null
 ) {
   return Bun.serve({
     port,
@@ -31,7 +33,8 @@ export function createHttpServer(
         return Response.json(
           {
             status: "ok",
-            pending_requests: pending.size,
+            mode: MODE,
+            pending_requests: pending?.size ?? 0,
             uptime_seconds: Math.floor(process.uptime()),
           },
           { headers: CORS_HEADERS }
@@ -67,8 +70,8 @@ export function createHttpServer(
 
 async function handleChatCompletions(
   req: Request,
-  pending: PendingRequestMap,
-  mcp: McpServer
+  pending: PendingRequestMap | null,
+  mcp: McpServer | null
 ): Promise<Response> {
   let body: OpenAIChatRequest;
   try {
@@ -97,6 +100,55 @@ async function handleChatCompletions(
 
   const wantsStream = !!body.stream;
   const model = parseModel(req.headers.get("x-claude-model"));
+  const hasTools = !!(body.tools && body.tools.length > 0);
+
+  if (MODE === "cli") {
+    return handleCliMode(body, model, wantsStream, hasTools);
+  }
+
+  return handleChannelMode(body, model, wantsStream, hasTools, pending!, mcp!);
+}
+
+// --- CLI Mode ---
+
+async function handleCliMode(
+  body: OpenAIChatRequest,
+  model: ClaudeModel,
+  wantsStream: boolean,
+  hasTools: boolean
+): Promise<Response> {
+  const requestId = `cli-${Date.now()}`;
+
+  if (wantsStream) {
+    return buildCliStreamingResponse(requestId, model, body.messages, hasTools, body.tools);
+  }
+
+  try {
+    const content = await runClaude(body.messages, model, body.tools);
+    return Response.json(
+      buildOpenAIResponse(requestId, model, content, hasTools),
+      { headers: CORS_HEADERS }
+    );
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Internal server error";
+    return Response.json(
+      buildOpenAIError(500, message, "internal_error"),
+      { status: 500, headers: CORS_HEADERS }
+    );
+  }
+}
+
+// --- Channel Mode ---
+
+async function handleChannelMode(
+  body: OpenAIChatRequest,
+  model: ClaudeModel,
+  wantsStream: boolean,
+  hasTools: boolean,
+  pending: PendingRequestMap,
+  mcp: McpServer
+): Promise<Response> {
   const requestId = pending.generateId();
 
   const subagentPrompt = formatSubagentPrompt(body.messages, body.tools);
@@ -139,7 +191,6 @@ async function handleChatCompletions(
 
   try {
     const content = await responsePromise;
-    const hasTools = !!(body.tools && body.tools.length > 0);
 
     if (wantsStream) {
       return buildStreamingResponse(requestId, model, content, hasTools);

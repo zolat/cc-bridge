@@ -39,7 +39,7 @@ Subagents run in the background, so the router can dispatch multiple requests in
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) with an active subscription (Pro/Max)
 - [Bun](https://bun.sh) runtime
-- Channels feature (research preview as of March 2026)
+- Channels feature (research preview as of March 2026) — only for channel mode
 
 ## Setup
 
@@ -51,13 +51,25 @@ bun install
 
 ## Usage
 
-Start Claude Code with the channel plugin loaded:
+CC Bridge supports two modes:
+
+### Channel mode (default)
+
+Routes requests through a Claude Code session using the channels API. This is the sanctioned integration path.
 
 ```bash
 claude --dangerously-load-development-channels server:cc-bridge
 ```
 
-That's it. The bridge is now listening on `http://localhost:8766`.
+### CLI mode
+
+Spawns `claude -p` processes directly. No running Claude Code session needed — simpler setup, real token-by-token streaming, naturally stateless and concurrent.
+
+```bash
+CLAUDE_BRIDGE_MODE=cli bun src/server.ts
+```
+
+The bridge is now listening on `http://localhost:8766`.
 
 ### Test it
 
@@ -148,21 +160,25 @@ Environment variables:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `CLAUDE_BRIDGE_PORT` | `8766` | HTTP server port |
-| `CLAUDE_BRIDGE_TIMEOUT` | `120000` | Request timeout in ms |
+| `CLAUDE_BRIDGE_TIMEOUT` | `120000` | Request timeout in ms (channel mode) |
+| `CLAUDE_BRIDGE_MODE` | `channel` | `channel` or `cli` |
 
 ## Architecture
 
 ```
 src/
-  server.ts      Entry point
-  http.ts        HTTP server (Bun.serve)
-  mcp.ts         MCP server + send_response tool
-  formatter.ts   OpenAI messages → subagent prompt
-  parser.ts      Subagent response → OpenAI tool_calls
-  response.ts    OpenAI response/error builders
-  pending.ts     Request lifecycle management
-  types.ts       TypeScript interfaces
-  config.ts      Environment configuration
+  server.ts         Entry point (mode selection)
+  http.ts           HTTP server + request routing
+  mcp.ts            MCP server + send_response tool (channel mode)
+  cli.ts            claude -p process spawning (CLI mode)
+  cli-streaming.ts  Real SSE streaming via CLI stdout
+  streaming.ts      Fake SSE streaming (channel mode)
+  formatter.ts      OpenAI messages → subagent prompt
+  parser.ts         Subagent response → OpenAI tool_calls
+  response.ts       OpenAI response/error builders
+  pending.ts        Request lifecycle management (channel mode)
+  types.ts          TypeScript interfaces
+  config.ts         Environment configuration
 ```
 
 The router session (your Claude Code instance) uses a minimal `CLAUDE.md` that instructs it to mechanically dispatch requests to background subagents. A lightweight model like Haiku works well as the router — it dispatches fast and uses minimal context.
@@ -173,7 +189,7 @@ Open `demo.html` in a browser for a chat UI with built-in tool demos (weather, c
 
 ## Limitations
 
-- **Fake streaming** — `stream: true` is accepted for compatibility, but the full response is buffered before being sent as SSE chunks (not true token-by-token streaming).
+- **Streaming** — CLI mode supports real token-by-token streaming. Channel mode uses fake streaming (full response buffered, then sent as SSE chunks).
 - **Token usage** — `usage` fields in responses return 0. Token counts aren't available from subagents.
 - **Temperature/max_tokens** — these OpenAI parameters are not enforced at the model level.
 - **Router context growth** — the router session accumulates context over time. For very long sessions, you may need to restart.

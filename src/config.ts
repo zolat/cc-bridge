@@ -3,3 +3,6 @@ export const REQUEST_TIMEOUT_MS = parseInt(
   process.env.CLAUDE_BRIDGE_TIMEOUT || "120000",
   10
 );
+export const MODE = (process.env.CLAUDE_BRIDGE_MODE || "channel") as
+  | "channel"
+  | "cli";
