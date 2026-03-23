@@ -268,7 +268,7 @@ function parseModel(header: string | null): ClaudeModel {
 
 const mcp = new McpServer(
   {
-    name: "claude-bridge",
+    name: "cc-bridge",
     version: "0.1.0",
   },
   {
@@ -439,7 +439,7 @@ const httpServer = Bun.serve({
             meta: {
               request_id: requestId,
               model,
-              source: "claude-bridge",
+              source: "cc-bridge",
               chat_id: "bridge",
               message_id: requestId,
               user: "bridge",
@@ -454,7 +454,7 @@ const httpServer = Bun.serve({
           clearTimeout(pending.timer);
           pendingRequests.delete(requestId);
         }
-        console.error("[bridge] Failed to send channel notification:", err);
+        console.error("[cc-bridge] Failed to send channel notification:", err);
         return Response.json(
           buildOpenAIError(
             503,
@@ -496,11 +496,11 @@ const httpServer = Bun.serve({
   },
 });
 
-console.error(`[bridge] HTTP server listening on http://localhost:${PORT}`);
-console.error(`[bridge] Endpoints:`);
-console.error(`[bridge]   POST /v1/chat/completions`);
-console.error(`[bridge]   GET  /v1/models`);
-console.error(`[bridge]   GET  /health`);
+console.error(`[cc-bridge] HTTP server listening on http://localhost:${PORT}`);
+console.error(`[cc-bridge] Endpoints:`);
+console.error(`[cc-bridge]   POST /v1/chat/completions`);
+console.error(`[cc-bridge]   GET  /v1/models`);
+console.error(`[cc-bridge]   GET  /health`);
 
 // --- Start MCP Transport ---
 

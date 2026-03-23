@@ -1,8 +1,8 @@
-# Design: Claude Bridge
+# Design: CC Bridge
 
 ## Problem
 
-Local developer tools (Continue, Aider, Open WebUI, custom scripts) need an OpenAI-compatible endpoint for LLM inference. Today this requires either API keys with per-token billing or running local models via Ollama. Claude Bridge provides a third option: a local OpenAI-compatible server backed by your Claude Code subscription, giving local apps access to Claude Opus/Sonnet/Haiku without API billing.
+Local developer tools (Continue, Aider, Open WebUI, custom scripts) need an OpenAI-compatible endpoint for LLM inference. Today this requires either API keys with per-token billing or running local models via Ollama. CC Bridge provides a third option: a local OpenAI-compatible server backed by your Claude Code subscription, giving local apps access to Claude Opus/Sonnet/Haiku without API billing.
 
 ## Key Decisions
 
@@ -33,7 +33,7 @@ Local developer tools (Continue, Aider, Open WebUI, custom scripts) need an Open
 └─────────────────────┘                                │
                                                        ▼
 ┌──────────────────────────────────────────────────────────────┐
-│  Claude Bridge (Channel Plugin / MCP Server)                 │
+│  CC Bridge (Channel Plugin / MCP Server)                 │
 │                                                              │
 │  ┌─────────────┐    ┌──────────────┐    ┌────────────────┐  │
 │  │ Bun.serve   │    │ Request      │    │ Pending Map    │  │
@@ -118,7 +118,7 @@ Do not include any other commentary. Just respond and call the tool.
 The router session needs minimal instructions to stay lightweight:
 
 ```markdown
-# Claude Bridge Router
+# CC Bridge Router
 
 You are a mechanical request dispatcher. When you receive a channel notification
 from source "claude-bridge":

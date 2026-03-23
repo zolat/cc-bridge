@@ -1,7 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "mcp__claude-bridge__send_response"
+      "mcp__cc-bridge__send_response"
     ]
   }
 }
