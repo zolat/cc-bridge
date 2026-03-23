@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "claude-bridge": {
+      "command": "bun",
+      "args": ["/Users/zolat/projects/claude-bridge/server.ts"]
+    }
+  }
+}

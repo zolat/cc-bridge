@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Bridge</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0a0a0a;
+    color: #e0e0e0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    padding: 16px 24px;
+    border-bottom: 1px solid #222;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+  header h1 { font-size: 16px; font-weight: 600; color: #fff; }
+  .status {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    background: #1a1a1a;
+    color: #666;
+  }
+  .status.connected { background: #0a2a0a; color: #4ade80; }
+  .status.error { background: #2a0a0a; color: #f87171; }
+  .tools-badge {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    background: #1a1520;
+    color: #c084fc;
+  }
+  .model-select {
+    margin-left: auto;
+    display: flex;
+    gap: 6px;
+  }
+  .model-btn {
+    padding: 4px 12px;
+    border-radius: 6px;
+    border: 1px solid #333;
+    background: #1a1a1a;
+    color: #999;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .model-btn:hover { border-color: #555; color: #ccc; }
+  .model-btn.active { border-color: #d4a574; color: #d4a574; background: #1a1510; }
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .msg {
+    max-width: 720px;
+    width: 100%;
+    margin: 0 auto;
+    display: flex;
+    gap: 12px;
+  }
+  .msg-role {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #666;
+    min-width: 48px;
+    padding-top: 2px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .msg-role.user { color: #93c5fd; }
+  .msg-role.assistant { color: #d4a574; }
+  .msg-role.tool { color: #c084fc; }
+  .msg-body {
+    flex: 1;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .msg-meta {
+    font-size: 11px;
+    color: #444;
+    margin-top: 6px;
+  }
+  .tool-call-block {
+    background: #12101a;
+    border: 1px solid #2a2540;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-top: 6px;
+    font-size: 13px;
+  }
+  .tool-call-name {
+    color: #c084fc;
+    font-weight: 600;
+    font-size: 12px;
+  }
+  .tool-call-args {
+    color: #888;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    margin-top: 4px;
+  }
+  .tool-result-block {
+    background: #101a12;
+    border: 1px solid #253a28;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    color: #7dca8a;
+  }
+  .thinking {
+    color: #666;
+    font-style: italic;
+  }
+  .thinking::after {
+    content: '';
+    animation: dots 1.5s infinite;
+  }
+  @keyframes dots {
+    0%, 20% { content: ''; }
+    40% { content: '.'; }
+    60% { content: '..'; }
+    80%, 100% { content: '...'; }
+  }
+  #input-area {
+    padding: 16px 24px;
+    border-top: 1px solid #222;
+    flex-shrink: 0;
+  }
+  #input-wrap {
+    max-width: 720px;
+    margin: 0 auto;
+    display: flex;
+    gap: 8px;
+  }
+  #input {
+    flex: 1;
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: 1px solid #333;
+    background: #111;
+    color: #e0e0e0;
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    resize: none;
+    min-height: 42px;
+    max-height: 200px;
+  }
+  #input:focus { border-color: #555; }
+  #input::placeholder { color: #444; }
+  #send {
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: none;
+    background: #d4a574;
+    color: #0a0a0a;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    align-self: flex-end;
+  }
+  #send:hover { background: #e0b888; }
+  #send:disabled { background: #333; color: #666; cursor: not-allowed; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Claude Bridge</h1>
+  <span id="status" class="status">checking...</span>
+  <span class="tools-badge">3 tools</span>
+  <div class="model-select">
+    <button class="model-btn" data-model="haiku">haiku</button>
+    <button class="model-btn active" data-model="sonnet">sonnet</button>
+    <button class="model-btn" data-model="opus">opus</button>
+  </div>
+</header>
+
+<div id="messages"></div>
+
+<div id="input-area">
+  <div id="input-wrap">
+    <textarea id="input" placeholder="Try: &quot;What's the weather in Tokyo?&quot; or &quot;Calculate 15% tip on $84.50&quot; or &quot;Roll 3d6 and tell me if I pass a DC 12 check&quot;" rows="1"></textarea>
+    <button id="send">Send</button>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:8766';
+let model = 'sonnet';
+let conversationHistory = [];
+let busy = false;
+
+// --- Demo Tools ---
+
+const tools = [
+  {
+    type: 'function',
+    function: {
+      name: 'get_weather',
+      description: 'Get the current weather for a city. Returns temperature, conditions, humidity, and wind.',
+      parameters: {
+        type: 'object',
+        properties: {
+          city: { type: 'string', description: 'City name, e.g. "Tokyo" or "New York"' },
+          units: { type: 'string', enum: ['celsius', 'fahrenheit'], description: 'Temperature units' }
+        },
+        required: ['city']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'calculate',
+      description: 'Evaluate a math expression. Supports +, -, *, /, **, %, parentheses, and Math functions (sqrt, sin, cos, abs, round, floor, ceil, PI, E).',
+      parameters: {
+        type: 'object',
+        properties: {
+          expression: { type: 'string', description: 'Math expression to evaluate, e.g. "sqrt(144) + 3 * 5"' }
+        },
+        required: ['expression']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'roll_dice',
+      description: 'Roll dice using standard notation. Returns individual rolls and total.',
+      parameters: {
+        type: 'object',
+        properties: {
+          notation: { type: 'string', description: 'Dice notation, e.g. "2d6", "1d20+5", "4d6dl1" (drop lowest 1)' }
+        },
+        required: ['notation']
+      }
+    }
+  }
+];
+
+// --- Tool Executors ---
+
+function executeGetWeather({ city, units = 'celsius' }) {
+  const conditions = ['sunny', 'partly cloudy', 'cloudy', 'rainy', 'stormy', 'snowy', 'foggy', 'windy'];
+  const condition = conditions[Math.floor(Math.random() * conditions.length)];
+  const baseTemp = Math.floor(Math.random() * 35) - 5;
+  const temp = units === 'fahrenheit' ? Math.round(baseTemp * 9/5 + 32) : baseTemp;
+  const humidity = Math.floor(Math.random() * 60) + 30;
+  const wind = Math.floor(Math.random() * 30) + 2;
+  return {
+    city,
+    temperature: temp,
+    units: units === 'fahrenheit' ? 'F' : 'C',
+    condition,
+    humidity: `${humidity}%`,
+    wind_speed: `${wind} km/h`
+  };
+}
+
+function executeCalculate({ expression }) {
+  try {
+    // Allow safe math operations only
+    const sanitized = expression.replace(/[^0-9+\-*/().%\s,a-zA-Z]/g, '');
+    const withMath = sanitized
+      .replace(/\b(sqrt|sin|cos|tan|abs|round|floor|ceil|log|pow|min|max)\b/g, 'Math.$1')
+      .replace(/\bPI\b/g, 'Math.PI')
+      .replace(/\bE\b/g, 'Math.E');
+    const result = new Function(`"use strict"; return (${withMath})`)();
+    return { expression, result: Number(result.toFixed(10)) };
+  } catch (e) {
+    return { expression, error: `Could not evaluate: ${e.message}` };
+  }
+}
+
+function executeRollDice({ notation }) {
+  const match = notation.match(/^(\d+)?d(\d+)(?:(dl|kh)(\d+))?(?:([+-])(\d+))?$/i);
+  if (!match) return { notation, error: 'Invalid notation. Use format like 2d6, 1d20+5, 4d6dl1' };
+
+  const count = parseInt(match[1] || '1');
+  const sides = parseInt(match[2]);
+  const dropKeep = match[3]?.toLowerCase();
+  const dropKeepN = parseInt(match[4] || '0');
+  const modOp = match[5];
+  const modVal = parseInt(match[6] || '0');
+
+  let rolls = [];
+  for (let i = 0; i < count; i++) {
+    rolls.push(Math.floor(Math.random() * sides) + 1);
+  }
+
+  const allRolls = [...rolls];
+  let kept = [...rolls];
+
+  if (dropKeep === 'dl' && dropKeepN > 0) {
+    kept.sort((a, b) => a - b);
+    kept = kept.slice(dropKeepN);
+  } else if (dropKeep === 'kh' && dropKeepN > 0) {
+    kept.sort((a, b) => b - a);
+    kept = kept.slice(0, dropKeepN);
+  }
+
+  let total = kept.reduce((a, b) => a + b, 0);
+  if (modOp === '+') total += modVal;
+  if (modOp === '-') total -= modVal;
+
+  const result = { notation, rolls: allRolls, total };
+  if (dropKeep) result.kept = kept;
+  if (modOp) result.modifier = `${modOp}${modVal}`;
+  return result;
+}
+
+function executeTool(name, args) {
+  const parsedArgs = typeof args === 'string' ? JSON.parse(args) : args;
+  switch (name) {
+    case 'get_weather': return executeGetWeather(parsedArgs);
+    case 'calculate': return executeCalculate(parsedArgs);
+    case 'roll_dice': return executeRollDice(parsedArgs);
+    default: return { error: `Unknown tool: ${name}` };
+  }
+}
+
+// --- UI ---
+
+const messagesEl = document.getElementById('messages');
+const inputEl = document.getElementById('input');
+const sendBtn = document.getElementById('send');
+const statusEl = document.getElementById('status');
+
+inputEl.addEventListener('input', () => {
+  inputEl.style.height = 'auto';
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 200) + 'px';
+});
+
+document.querySelectorAll('.model-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    model = btn.dataset.model;
+  });
+});
+
+async function checkHealth() {
+  try {
+    const res = await fetch(`${API}/health`);
+    const data = await res.json();
+    statusEl.textContent = `connected (${data.pending_requests} pending)`;
+    statusEl.className = 'status connected';
+  } catch {
+    statusEl.textContent = 'disconnected';
+    statusEl.className = 'status error';
+  }
+}
+checkHealth();
+setInterval(checkHealth, 5000);
+
+function escapeHtml(text) {
+  const d = document.createElement('div');
+  d.textContent = text;
+  return d.innerHTML;
+}
+
+function addMessage(role, content, meta) {
+  const div = document.createElement('div');
+  div.className = 'msg';
+  div.innerHTML = `
+    <div class="msg-role ${role}">${role}</div>
+    <div>
+      <div class="msg-body">${escapeHtml(content)}</div>
+      ${meta ? `<div class="msg-meta">${meta}</div>` : ''}
+    </div>
+  `;
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  return div;
+}
+
+function addToolCalls(toolCalls) {
+  const div = document.createElement('div');
+  div.className = 'msg';
+  const blocks = toolCalls.map(tc => {
+    const args = typeof tc.function.arguments === 'string'
+      ? JSON.parse(tc.function.arguments) : tc.function.arguments;
+    return `<div class="tool-call-block">
+      <div class="tool-call-name">${escapeHtml(tc.function.name)}()</div>
+      <div class="tool-call-args">${escapeHtml(JSON.stringify(args, null, 2))}</div>
+    </div>`;
+  }).join('');
+  div.innerHTML = `
+    <div class="msg-role tool">tool call</div>
+    <div>${blocks}</div>
+  `;
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function addToolResults(results) {
+  const div = document.createElement('div');
+  div.className = 'msg';
+  const blocks = results.map(r =>
+    `<div class="tool-result-block">${escapeHtml(JSON.stringify(r.result, null, 2))}</div>`
+  ).join('');
+  div.innerHTML = `
+    <div class="msg-role tool">result</div>
+    <div>${blocks}</div>
+  `;
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function addThinking(label = 'thinking') {
+  const div = document.createElement('div');
+  div.className = 'msg';
+  div.id = 'thinking';
+  div.innerHTML = `
+    <div class="msg-role assistant">assistant</div>
+    <div><div class="msg-body thinking">${escapeHtml(label)}</div></div>
+  `;
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function removeThinking() {
+  const el = document.getElementById('thinking');
+  if (el) el.remove();
+}
+
+async function callBridge(messages) {
+  const res = await fetch(`${API}/v1/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Claude-Model': model,
+    },
+    body: JSON.stringify({ messages, tools }),
+  });
+  return res.json();
+}
+
+async function send() {
+  const text = inputEl.value.trim();
+  if (!text || busy) return;
+
+  busy = true;
+  sendBtn.disabled = true;
+  inputEl.value = '';
+  inputEl.style.height = 'auto';
+
+  addMessage('user', text);
+  conversationHistory.push({ role: 'user', content: text });
+
+  const start = Date.now();
+  let maxLoops = 5; // prevent infinite tool loops
+
+  try {
+    while (maxLoops-- > 0) {
+      addThinking(maxLoops < 4 ? 'processing tool results' : 'thinking');
+      const data = await callBridge(conversationHistory);
+      removeThinking();
+
+      if (data.error) {
+        addMessage('assistant', `Error: ${data.error.message}`, model);
+        break;
+      }
+
+      const choice = data.choices[0];
+      const msg = choice.message;
+
+      // Tool calls — execute locally and loop
+      if (choice.finish_reason === 'tool_calls' && msg.tool_calls?.length) {
+        addToolCalls(msg.tool_calls);
+
+        // Add assistant message with tool_calls to history
+        conversationHistory.push({
+          role: 'assistant',
+          content: msg.content,
+          tool_calls: msg.tool_calls
+        });
+
+        // Execute each tool and add results
+        const results = [];
+        for (const tc of msg.tool_calls) {
+          const result = executeTool(tc.function.name, tc.function.arguments);
+          results.push({ id: tc.id, name: tc.function.name, result });
+          conversationHistory.push({
+            role: 'tool',
+            tool_call_id: tc.id,
+            content: JSON.stringify(result)
+          });
+        }
+        addToolResults(results);
+        // Loop — send results back for final answer
+        continue;
+      }
+
+      // Normal text response — done
+      const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+      addMessage('assistant', msg.content || '', `${data.model} | ${elapsed}s`);
+      conversationHistory.push({ role: 'assistant', content: msg.content });
+      break;
+    }
+  } catch (err) {
+    removeThinking();
+    addMessage('assistant', `Connection error: ${err.message}`, model);
+  }
+
+  busy = false;
+  sendBtn.disabled = false;
+  inputEl.focus();
+}
+
+sendBtn.addEventListener('click', send);
+inputEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    send();
+  }
+});
+
+inputEl.focus();
+</script>
+</body>
+</html>
