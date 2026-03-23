@@ -173,7 +173,7 @@ Open `demo.html` in a browser for a chat UI with built-in tool demos (weather, c
 
 ## Limitations
 
-- **No streaming** — responses are returned complete, not streamed via SSE. Phase 2 feature.
+- **Fake streaming** — `stream: true` is accepted for compatibility, but the full response is buffered before being sent as SSE chunks (not true token-by-token streaming).
 - **Token usage** — `usage` fields in responses return 0. Token counts aren't available from subagents.
 - **Temperature/max_tokens** — these OpenAI parameters are not enforced at the model level.
 - **Router context growth** — the router session accumulates context over time. For very long sessions, you may need to restart.

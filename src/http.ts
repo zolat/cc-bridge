@@ -3,6 +3,7 @@ import type { OpenAIChatRequest } from "./types.js";
 import { VALID_MODELS } from "./types.js";
 import { formatSubagentPrompt, formatChannelNotification } from "./formatter.js";
 import { buildOpenAIResponse, buildOpenAIError, parseModel } from "./response.js";
+import { buildStreamingResponse } from "./streaming.js";
 import { PendingRequestMap } from "./pending.js";
 import { REQUEST_TIMEOUT_MS } from "./config.js";
 
@@ -94,17 +95,7 @@ async function handleChatCompletions(
     );
   }
 
-  if (body.stream) {
-    return Response.json(
-      buildOpenAIError(
-        400,
-        "Streaming is not supported in this version. Set stream: false or omit it.",
-        "invalid_request_error"
-      ),
-      { status: 400, headers: CORS_HEADERS }
-    );
-  }
-
+  const wantsStream = !!body.stream;
   const model = parseModel(req.headers.get("x-claude-model"));
   const requestId = pending.generateId();
 
@@ -149,6 +140,11 @@ async function handleChatCompletions(
   try {
     const content = await responsePromise;
     const hasTools = !!(body.tools && body.tools.length > 0);
+
+    if (wantsStream) {
+      return buildStreamingResponse(requestId, model, content, hasTools);
+    }
+
     return Response.json(
       buildOpenAIResponse(requestId, model, content, hasTools),
       { headers: CORS_HEADERS }
