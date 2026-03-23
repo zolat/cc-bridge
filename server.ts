@@ -87,13 +87,14 @@ function formatMessage(m: OpenAIMessage): string {
     const calls = m.tool_calls
       .map(
         (tc) =>
-          `<tool_call>{"id":"${tc.id}","name":"${tc.function.name}","arguments":${tc.function.arguments}}</tool_call>`
+          `[assistant called ${tc.function.name}(${tc.function.arguments})]`
       )
       .join("\n");
-    return `[assistant]: ${m.content || ""}\n${calls}`;
+    const prefix = m.content ? `[assistant]: ${m.content}\n` : "";
+    return `${prefix}${calls}`;
   }
   if (m.role === "tool") {
-    return `[tool (id=${m.tool_call_id})]: ${m.content}`;
+    return `[tool result]: ${m.content}`;
   }
   return `[${m.role}]: ${m.content || ""}`;
 }
