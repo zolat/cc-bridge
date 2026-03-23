@@ -2,7 +2,7 @@
   "mcpServers": {
     "cc-bridge": {
       "command": "bun",
-      "args": ["/Users/zolat/projects/cc-bridge/server.ts"]
+      "args": ["/Users/zolat/projects/cc-bridge/src/server.ts"]
     }
   }
 }
